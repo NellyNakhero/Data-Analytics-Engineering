@@ -13,13 +13,10 @@ mvn spring-boot:run
 
 4. Send a message:
 
-curl -X POST http://localhost:8080/kafka/send -d "hello"
+curl -X POST http://localhost:8084/kafka/send -d "hello"
 
 5. Run Flink job:
 
-mvn exec:java -Dexec.mainClass="com.example.flink.FlinkKafkaProcessor"
-
-mvn exec:java -Dexec.mainClass="com.example.flinkkafka.flink.FlinkKafkaProcessor"
 
 mvn exec:java -Dexec.mainClass="com.data.engineering.data_engineering.flink.FlinkKafkaProcessor"
 

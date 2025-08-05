@@ -7,16 +7,20 @@ services:
   kafka:
     image: confluentinc/cp-kafka:7.5.0
     ports:
-      - "9092:9092"
+      - "9092:9092"     # Internal listener (used by Docker services)
+      - "29092:29092"   # External listener (used by host apps like Spring Boot)
     depends_on:
       - zookeeper
     environment:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,PLAINTEXT_HOST://0.0.0.0:29092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    networks:
+      - flink-net
 
   minio:
     image: minio/minio
@@ -29,11 +33,18 @@ services:
       MINIO_ROOT_USER: minioadmin
       MINIO_ROOT_PASSWORD: minioadmin
     command: server /data --console-address ":9001"
+    networks:
+      - flink-net
 
   flink-jobmanager:
     image: flink:1.17.0-scala_2.12
     ports:
       - "8081:8081"
+    networks:
+      - flink-net
+    volumes:
+      - ../../target/:/opt/flink/usrlib
+      - ./hadoop-conf:/opt/flink/conf
     command: jobmanager
     environment:
       JOB_MANAGER_RPC_ADDRESS: flink-jobmanager
@@ -46,11 +57,16 @@ services:
         s3.path.style.access: true
         s3.access-key: minioadmin
         s3.secret-key: minioadmin
+      JAVA_TOOL_OPTIONS: --add-opens=java.base/java.lang=ALL-UNNAMED
 
   flink-taskmanager:
     image: flink:1.17.0-scala_2.12
     depends_on:
       - flink-jobmanager
+    networks:
+      - flink-net
+    volumes:
+      - ./hadoop-conf:/opt/flink/conf
     command: taskmanager
     environment:
       JOB_MANAGER_RPC_ADDRESS: flink-jobmanager
@@ -63,6 +79,7 @@ services:
         s3.path.style.access: true
         s3.access-key: minioadmin
         s3.secret-key: minioadmin
+      JAVA_TOOL_OPTIONS: --add-opens=java.base/java.lang=ALL-UNNAMED
 
   flink-sql-client:
     image: flink:1.17.0-scala_2.12
@@ -72,6 +89,13 @@ services:
     depends_on:
       - flink-jobmanager
       - flink-taskmanager
+    networks:
+      - flink-net
+    volumes:
+      - ./hadoop-conf:/opt/flink/conf
+
+networks:
+  flink-net:
 
 volumes:
   minio-data:

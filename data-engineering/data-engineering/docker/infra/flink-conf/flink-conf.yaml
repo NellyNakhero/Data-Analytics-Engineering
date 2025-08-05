@@ -1,0 +1,4 @@
+jobmanager.rpc.address: flink-jobmanager
+blob.server.port: 6124
+query.server.port: 6125
+env.java.opts: --add-opens=java.base/java.lang=ALL-UNNAMED

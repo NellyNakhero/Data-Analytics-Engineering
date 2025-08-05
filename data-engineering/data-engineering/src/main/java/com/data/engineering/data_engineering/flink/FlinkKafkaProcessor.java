@@ -12,12 +12,11 @@ import org.apache.flink.connector.kafka.source.KafkaSource;
 
 
 public class FlinkKafkaProcessor {
-
     public static void main(String[] args) throws Exception {
         var env = StreamExecutionEnvironment.getExecutionEnvironment();
 
         var source = KafkaSource.<String>builder()
-                .setBootstrapServers("localhost:9092")
+                .setBootstrapServers("localhost:29092") // changed!
                 .setTopics("input.topic")
                 .setGroupId("flink-group")
                 .setStartingOffsets(OffsetsInitializer.earliest())
@@ -25,22 +24,23 @@ public class FlinkKafkaProcessor {
                 .build();
 
         var sink = KafkaSink.<String>builder()
-                .setBootstrapServers("localhost:9092")
+                .setBootstrapServers("localhost:29092")
                 .setRecordSerializer(KafkaRecordSerializationSchema.builder()
                         .setTopic("output.topic")
                         .setValueSerializationSchema(new SimpleStringSchema())
-                        .build()
-                )
+                        .build())
                 .build();
 
         DataStream<String> input = env.fromSource(source, WatermarkStrategy.noWatermarks(), "Kafka Source");
 
-        DataStream<String> processed = input.map(value -> "Java 21 processed: " +value);
+        DataStream<String> processed = input.map(value -> {
+            String result = "Java 21 processed: " + value;
+            System.out.println("Processed message: " + result);
+            return result;
+        });
 
         processed.sinkTo(sink);
 
         env.execute("Flink Java 21 Kafka Processor");
     }
-
-
 }
