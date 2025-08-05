@@ -7,14 +7,16 @@ services:
   kafka:
     image: confluentinc/cp-kafka:7.5.0
     ports:
-      - "9092:9092"
+      - "9092:9092"     # Internal listener (used by Docker services)
+      - "29092:29092"   # External listener (used by host apps like Spring Boot)
     depends_on:
       - zookeeper
     environment:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,PLAINTEXT_HOST://0.0.0.0:29092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
 
@@ -31,9 +33,11 @@ services:
     command: server /data --console-address ":9001"
 
   flink-jobmanager:
-    image: flink:1.17.0-scala_2.12
+    image: flink:1.20.0-scala_2.12
     ports:
       - "8081:8081"
+    volumes:
+      - ../../flink-job/target/:/opt/flink/jars
     command: jobmanager
     environment:
       JOB_MANAGER_RPC_ADDRESS: flink-jobmanager
@@ -48,7 +52,7 @@ services:
         s3.secret-key: minioadmin
 
   flink-taskmanager:
-    image: flink:1.17.0-scala_2.12
+    image: flink:1.20.0-scala_2.12
     depends_on:
       - flink-jobmanager
     command: taskmanager
@@ -65,7 +69,7 @@ services:
         s3.secret-key: minioadmin
 
   flink-sql-client:
-    image: flink:1.17.0-scala_2.12
+    image: flink:1.20.0-scala_2.12
     stdin_open: true
     tty: true
     entrypoint: ["./bin/sql-client.sh", "embedded"]

@@ -1,76 +1,66 @@
-###  run the docker compose
+## GETTING STARTED
+
+## STARTUP THE INFRA
 
 `
-cd docker
-docker-compose up
+    cd docker/infra
+    docker-compose up
 `
 
-### create kafka topics
+## MODULE: API-SERVER
 
-open shell
+#### To run Spring Boot API
 
-`docker exec -it infra-kafka-1 bash`
-g
-Inside the container, create your input.topic and output.topic:
+    cd api-server
+    mvn clean spring-boot:run
 
-<code>
+#### Test the Kafka Producer Endpoint
 
-# Create input.topic
-kafka-topics --create \
---topic input.topic \
---bootstrap-server localhost:9092 \
---partitions 1 \
---replication-factor 1
+    curl -X POST http://localhost:8084/kafka/send \
+     -H "Content-Type: text/plain" \
+     -d "Hello from Spring Boot Kafka!"
 
-# Create output.topic
-kafka-topics --create \
---topic output.topic \
---bootstrap-server localhost:9092 \
---partitions 1 \
---replication-factor 1
+#### Check Kafka topics exist:
+    docker exec -it <kafka-container-name> kafka-topics --bootstrap-server localhost:9092 --list
 
-</code>
+in this case it will be
 
-confirm  the topics exist
+    docker exec -it  infra-kafka-1 kafka-topics --bootstrap-server localhost:9092 --list
 
-`kafka-topics --list --bootstrap-server localhost:9092`
+#### Consume from output.topic to verify Flink processed the message:
 
-You should see
+    docker exec -it <kafka-container-name> kafka-console-consumer \
+        --bootstrap-server localhost:9092 \
+        --topic output.topic \
+        --from-beginning
 
-`input.topic
-output.topic
-`
+in this case it will be
 
-### Build the app
+    docker exec -it infra-kafka-1 kafka-console-consumer \
+        --bootstrap-server localhost:9092 \
+        --topic output.topic \
+        --from-beginning
 
-`mvn clean compile assembly:single`
 
-## Confirm the new fat JAR is created
+## MODULE: FLINK JOB
 
-` ls target/data-engineering-0.0.1-SNAPSHOT-jar-with-dependencies.jar`
+#### To run the Flink job, package the JAR using Maven
 
-## Run the app
+    cd flink-job
+    mvn clean package
 
-`java -jar target/data-engineering-0.0.1-SNAPSHOT-jar-with-dependencies.jar`
+You should get:
 
-You should see this in the logs
+    target/flink-job-0.0.1-SNAPSHOT-jar-with-dependencies.jar
 
-`Seeking to earliest offset of partition input.topic-0
-Resetting offset for partition input.topic-0 to position FetchPosition{offset=0, ...}
-`
+#### Submit the Flink Job
 
-## To run the API
-`curl -X POST http://localhost:8084/kafka/send -d "hello from java 21"`
+    docker exec -it <flink-jobmanager-container-id> bash
+    flink run /opt/flink/jars/flink-job-0.0.1-SNAPSHOT-jar-with-dependencies.jar
 
-Alternatively, run the kafka producer
+## NB
+- Confirm Kafka is running: `docker ps` should show the kafka container
+- Use Kafka CLI tools inside the Kafka container to check topic existence:
 
-`docker exec -it infra-kafka-1 kafka-console-producer --broker-list localhost:9092 --topic input.topic`
-
-Additionally, when you run
-
-` docker exec -it infra-kafka-1 kafka-console-consumer \
-  --bootstrap-server localhost:9092 \
-  --topic output.topic \
-  --from-beginning`
-
-You should see the messages you published
+      docker exec -it <kafka-container> kafka-topics --bootstrap-server kafka:9092 --list
+- to stop the docker containers `docker-compose down`
