@@ -4,6 +4,7 @@ services:
 
   zookeeper:
     image: confluentinc/cp-zookeeper:7.5.0
+    container_name: zookeeper
     ports:
       - "2181:2181"
     environment:
@@ -11,6 +12,7 @@ services:
 
   kafka:
     image: confluentinc/cp-kafka:7.5.0
+    container_name: kafka
     depends_on:
       - zookeeper
     ports:
@@ -19,10 +21,12 @@ services:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
 
   schema-registry:
     image: confluentinc/cp-schema-registry:7.5.0
+    container_name: schema-registry
     depends_on:
       - kafka
     ports:
@@ -32,7 +36,10 @@ services:
       SCHEMA_REGISTRY_HOST_NAME: schema-registry
 
   kafka-connect:
-    image: confluentinc/cp-kafka-connect:7.5.0
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: custom-kafka-connect
     container_name: kafka-connect
     depends_on:
       - kafka
@@ -49,7 +56,7 @@ services:
       CONNECT_KEY_CONVERTER: org.apache.kafka.connect.storage.StringConverter
       CONNECT_VALUE_CONVERTER: org.apache.kafka.connect.json.JsonConverter
       CONNECT_VALUE_CONVERTER_SCHEMAS_ENABLE: "true"
-      CONNECT_PLUGIN_PATH: /usr/share/java,/usr/share/java/aiven-smts
+      CONNECT_PLUGIN_PATH: /usr/share/java
       CONNECT_LOG4J_LOGGERS: org.reflections=DEBUG
       CONNECT_REST_ADVERTISED_HOST_NAME: kafka-connect
       CONNECT_CONFIG_STORAGE_REPLICATION_FACTOR: 1
@@ -57,8 +64,6 @@ services:
       CONNECT_STATUS_STORAGE_REPLICATION_FACTOR: 1
       AWS_ACCESS_KEY_ID: minioadmin
       AWS_SECRET_ACCESS_KEY: minioadmin
-    volumes:
-      - ./connect-plugins/aiven-smts:/usr/share/java/aiven-smts
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8083/connectors"]
       interval: 10s
@@ -115,6 +120,7 @@ services:
 
   kafka-ui:
     image: provectuslabs/kafka-ui:latest
+    container_name: kafka-ui
     ports:
       - "8000:8080"
     environment:
