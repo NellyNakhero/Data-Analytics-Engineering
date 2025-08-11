@@ -76,6 +76,9 @@ kafka-topics --bootstrap-server localhost:9092 --list
 
 </code>
 
+ensure kafka connect sees our plugin
+`curl -s http://localhost:8083/connector-plugins | jq`
+
 
 4. Send sample events with headers
 
@@ -95,6 +98,40 @@ kafka-console-producer \
 
 
 </code>
+
+
+or alternatively, you can use kcat
+
+- send events without headers
+
+`$ echo "Hello Kafka" | docker run --rm --network datahub-components_default -i edenhill/kcat:1.7.0 -P -b kafka:9092 -t input-topic`
+
+- Send event with headers
+
+`$ echo "Hello Kafka with headers" | docker run --rm --network datahub-components_default -i edenhill/kcat:1.7.0 -P -b kafka:9092 -t input-topic -H "headerKey1=headerValue1" -H "headerKey2=headerValue2"`
+
+-  consume the messages to confirm headers are present
+
+`docker run --rm --network datahub-components_default edenhill/kcat:1.7.0 -C -b kafka:9092 -t input-topic -f 'Headers: %h\nMessage: %s\n'`
+
+press `cntrl + c` to exit
+
+Your output should be something like this
+
+`
+Headers: 
+% Reached end of topic input-topic [0] at offset 2
+% Reached end of topic input-topic [0] at offset 3
+% Reached end of topic input-topic [0] at offset 4
+Message: Hello Kafka
+Headers: headerKey1=headerValue1,headerKey2=headerValue2
+Message: Hello Kafka with headers
+Headers: headerKey1=headerValue1,headerKey2=headerValue2
+Message: Hello Kafka with headers
+Headers:
+Message: Hello Kafka
+`
+
 
 
 5. Post the Kafka Connect Sink config:
