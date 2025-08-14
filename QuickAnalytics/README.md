@@ -1,10 +1,12 @@
 ## OVERVIEW
 
+Protobuf Msgs
+↓
 Kafka (events)
 ↓
-Kafka Connect (JDBC Sink Connector)
+Kafka Connect (JDBC Sink Connector with ProtobufConverter)
 ↓
-PostgreSQL (data sink for analytics)
+PostgreSQL (data sink for analytics with auto-evolving schema)
 ↓
 Superset (BI tool on top of Postgres)
 
@@ -116,11 +118,13 @@ curl -X POST http://localhost:8083/connectors \
       "connection.user": "analytics",
       "connection.password": "analytics",
       "auto.create": "true",
+      "auto.evolve": "true",
       "insert.mode": "insert",
       "pk.mode": "none",
       "table.name.format": "events"
     }
   }'
+
 ```
 
 ---
@@ -162,11 +166,19 @@ The state should be `RUNNING`
 ### 6. Send test data to kafka
 
 ```bash
-docker exec -it quickanalytics-kafka-1 bash
-[appuser@c12d7898c438 ~]$ kafka-console-producer --broker-list kafka:9092 --topic events_topic
->{"schema":{"type":"struct","fields":[{"type":"int32","optional":false,"field":"user_id"},{"type":"string","optional":false,"field":"event"}],"optional":false,"name":"events"},"payload":{"user_id":101,"event":"signup"}}
->{"schema":{"type":"struct","fields":[{"type":"int32","optional":false,"field":"user_id"},{"type":"string","optional":false,"field":"event"}],"optional":false,"name":"events"},"payload":{"user_id":101,"event":"signup"}}
->
+docker run --rm -it --network quickanalytics_default \
+  confluentinc/cp-schema-registry:7.6.0 \
+  kafka-protobuf-console-producer \
+    --broker-list kafka:9092 \
+    --topic events_topic \
+    --property schema.registry.url=http://schema-registry:8081 \
+    --property value.schema='syntax = "proto3"; package myproto; message Event { int32 user_id = 1; string event = 2; string device = 3; }'
+
+#then type
+{"user_id": 103, "event": "signup", "device": "mobile"}
+{"user_id": 101, "event": "signup"}
+{"user_id": 102, "event": "login"}
+
 ```
 
 Now check if if the event was streamed to postgres table
