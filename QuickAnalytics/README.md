@@ -53,7 +53,7 @@ cd QuickAnalytics
 ### 2. Start the Services
 
 ```bash
-docker-compose up -d
+docker-compose up -d --build
 ```
 
 ---
@@ -109,11 +109,11 @@ you should see something similar to
 curl -X POST http://localhost:8083/connectors \
   -H "Content-Type: application/json" \
   -d '{
-    "name": "postgres-sink-connector",
+    "name": "multi-topic-sink",
     "config": {
       "connector.class": "io.confluent.connect.jdbc.JdbcSinkConnector",
       "tasks.max": "1",
-      "topics": "events_topic",
+      "topics": "events_topic,users_topic",
       "connection.url": "jdbc:postgresql://postgres:5432/analytics",
       "connection.user": "analytics",
       "connection.password": "analytics",
@@ -121,10 +121,9 @@ curl -X POST http://localhost:8083/connectors \
       "auto.evolve": "true",
       "insert.mode": "insert",
       "pk.mode": "none",
-      "table.name.format": "events"
+      "table.name.format": "${topic}"
     }
   }'
-
 ```
 
 ---
@@ -165,6 +164,8 @@ The state should be `RUNNING`
 
 ### 6. Send test data to kafka
 
+for topic 1: events_topic
+
 ```bash
 docker run --rm -it --network quickanalytics_default \
   confluentinc/cp-schema-registry:7.6.0 \
@@ -174,10 +175,29 @@ docker run --rm -it --network quickanalytics_default \
     --property schema.registry.url=http://schema-registry:8081 \
     --property value.schema='syntax = "proto3"; package myproto; message Event { int32 user_id = 1; string event = 2; string device = 3; }'
 
-#then type
-{"user_id": 103, "event": "signup", "device": "mobile"}
-{"user_id": 101, "event": "signup"}
-{"user_id": 102, "event": "login"}
+#then the messages
+{"user_id": 1, "event": "signup", "device": "mobile"}
+{"user_id": 2, "event": "login", "device": "desktop"}
+{"user_id": 3, "event": "purchase", "device": "tablet"}
+
+```
+
+Topic 2: users_topic
+
+```shell
+
+docker run --rm -it --network quickanalytics_default \
+  confluentinc/cp-schema-registry:7.6.0 \
+  kafka-protobuf-console-producer \
+    --broker-list kafka:9092 \
+    --topic users_topic \
+    --property schema.registry.url=http://schema-registry:8081 \
+    --property value.schema='syntax = "proto3"; package myproto; message User { int32 id = 1; string name = 2; string email = 3; int32 age = 4; }'
+
+#then the messages
+{"id": 1, "name": "Alice", "email": "alice@example.com", "age": 30}
+{"id": 2, "name": "Bob", "email": "bob@example.com", "age": 27}
+{"id": 3, "name": "Charlie", "email": "charlie@example.com", "age": 35}
 
 ```
 
@@ -188,14 +208,16 @@ $ docker exec -it quickanalytics-postgres-1 psql -U analytics -d analytics
 psql (15.13 (Debian 15.13-1.pgdg130+1))
 Type "help" for help.
 
-analytics=# \dt
-          List of relations
- Schema |  Name  | Type  |   Owner
---------+--------+-------+-----------
- public | events | table | analytics
-(1 row)
+analytics-#
+analytics-# \dt
+             List of relations
+ Schema |     Name     | Type  |   Owner
+--------+--------------+-------+-----------
+ public | events_topic | table | analytics
+ public | users_topic  | table | analytics
+(2 rows)
 
-analytics=# 
+analytics-# 
 ```
 
 
