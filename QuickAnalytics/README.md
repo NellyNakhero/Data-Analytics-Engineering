@@ -131,10 +131,10 @@ curl -X POST http://localhost:8083/connectors \
 ### 5. Check connector status
 
 ```bash
-curl http://localhost:8083/connectors/postgres-sink-connector/status | jq
+curl http://localhost:8083/connectors/multi-topic-sink/status | jq
 
 # OR
-curl http://localhost:8083/connectors/postgres-sink-connector/status
+curl http://localhost:8083/connectors/multi-topic-sink/status
 ```
 
 you should see
@@ -179,6 +179,9 @@ docker run --rm -it --network quickanalytics_default \
 {"user_id": 1, "event": "signup", "device": "mobile"}
 {"user_id": 2, "event": "login", "device": "desktop"}
 {"user_id": 3, "event": "purchase", "device": "tablet"}
+
+#SMT: pretty much means transform message
+#    - This tranformation can be to transform data from one format to another e.g a format that downstream expects
 
 ```
 
@@ -275,3 +278,4 @@ postgresql://analytics:analytics@postgres:5432/analytics
 
 ---
 
+create microservice topics
