@@ -63,30 +63,7 @@ Once the services are up, create the connector:
 ```bash
 curl -X POST http://localhost:8083/connectors \
   -H "Content-Type: application/json" \
-  -d '{
-    "name": "minio-s3-sink",
-    "config": {
-      "connector.class": "io.confluent.connect.s3.S3SinkConnector",
-      "tasks.max": "1",
-      "topics": "events",
-      "s3.bucket.name": "warehouse",
-      "s3.endpoint": "http://minio:9000",
-      "s3.path.style.access": "true",
-      "aws.access.key.id": "minioadmin",
-      "aws.secret.access.key": "minioadmin",
-      "aws.region": "us-east-1",
-      "flush.size": "3",
-      "format.class": "io.confluent.connect.s3.format.json.JsonFormat",
-      "storage.class": "io.confluent.connect.s3.storage.S3Storage",
-      "schema.compatibility": "NONE",
-      "partitioner.class": "io.confluent.connect.storage.partitioner.DefaultPartitioner"
-    }
-  }'
-  
-  #Or alternatively
-  curl -X POST http://localhost:8083/connectors \
-  -H "Content-Type: application/json" \
-  -d @s3-config.json
+  -d @connector-protobuf-config.json
 ```
 
 ---
@@ -96,16 +73,23 @@ curl -X POST http://localhost:8083/connectors \
 1. **Produce test messages to Kafka**
 
    ```bash
-   docker exec -it kacomia-kafka-1 bash
-   kafka-console-producer --broker-list kafka:9092 --topic events
+   docker run --rm -it --network kacomia_default \
+      confluentinc/cp-schema-registry:7.6.0 \
+      kafka-protobuf-console-producer \
+      --broker-list kacomia-kafka-1:9092 \
+      --topic events \
+      --property schema.registry.url=http://schema-registry:8081 \
+      --property value.schema='syntax = "proto3"; package myproto; message Event { int32 user_id = 1; string event = 2; string device = 3; }'
+      
+      
    ```
 
    Paste a few test messages:
 
    ```json
-   {"id": 1, "message": "hello"}
-   {"id": 2, "message": "world"}
-   {"id": 3, "message": "minio"}
+      {"user_id": 1, "event": "signup", "device": "mobile"}
+      {"user_id": 2, "event": "login", "device": "desktop"}
+      {"user_id": 3, "event": "purchase", "device": "tablet"}
    ```
 
 2. **Verify connector status**
@@ -130,7 +114,7 @@ curl -X POST http://localhost:8083/connectors \
         └── topics/
             └── events/
                 └── partition=0/
-                    └── events+0+0000000000.json
+                    └── events+0+0000000000.snappy.parquet
       ```
     * Click on a file to preview or download it.
 
