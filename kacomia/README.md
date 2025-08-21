@@ -45,8 +45,25 @@ This project demonstrates a Kafka Connect pipeline that writes data from a Kafka
 6. **Create kafka topic**
 
     ```bash
+   # events
    docker exec -it kacomia-kafka-1 kafka-topics --create \
     --topic events \
+    --partitions 1 \
+    --replication-factor 1 \
+    --if-not-exists \
+    --bootstrap-server kafka:9092
+   
+   #logs
+      docker exec -it kacomia-kafka-1 kafka-topics --create \
+    --topic logs \
+    --partitions 1 \
+    --replication-factor 1 \
+    --if-not-exists \
+    --bootstrap-server kafka:9092
+   
+   #metrics
+      docker exec -it kacomia-kafka-1 kafka-topics --create \
+    --topic metrics \
     --partitions 1 \
     --replication-factor 1 \
     --if-not-exists \
@@ -72,6 +89,8 @@ curl -X POST http://localhost:8083/connectors \
 
 1. **Produce test messages to Kafka**
 
+For topic events
+
    ```bash
    docker run --rm -it --network kacomia_default \
       confluentinc/cp-schema-registry:7.6.0 \
@@ -81,15 +100,39 @@ curl -X POST http://localhost:8083/connectors \
       --property schema.registry.url=http://schema-registry:8081 \
       --property value.schema='syntax = "proto3"; package myproto; message Event { int32 user_id = 1; string event = 2; string device = 3; }'
       
-      
-   ```
-
-   Paste a few test messages:
-
-   ```json
+      #Paste a few test messages:
       {"user_id": 1, "event": "signup", "device": "mobile"}
       {"user_id": 2, "event": "login", "device": "desktop"}
       {"user_id": 3, "event": "purchase", "device": "tablet"}
+   ```
+
+For topic logs   
+
+   ```bash
+      docker run --rm -it --network kacomia_default \
+        confluentinc/cp-schema-registry:7.6.0 \
+         kafka-protobuf-console-producer \
+           --broker-list kafka:9092 \
+           --topic logs \
+           --property schema.registry.url=http://schema-registry:8081 \
+           --property value.schema='syntax = "proto3"; package myproto; message Event { int32 user_id = 1; string event = 2; string device = 3; }'
+         
+         {"user_id": 2, "event": "error", "device": "server"}
+      
+   ```
+
+For topic metrics
+
+   ```bash
+   docker run --rm -it --network kacomia_default \
+     confluentinc/cp-schema-registry:7.6.0 \
+      kafka-protobuf-console-producer \
+        --broker-list kafka:9092 \
+        --topic metrics \
+        --property schema.registry.url=http://schema-registry:8081 \
+        --property value.schema='syntax = "proto3"; package myproto; message Event { int32 user_id = 1; string event = 2; string device = 3; }'
+      
+      {"user_id": 3, "event": "cpu_load", "device": "sensor"}
    ```
 
 2. **Verify connector status**
