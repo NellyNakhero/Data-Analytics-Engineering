@@ -175,6 +175,8 @@ docker-compose down -v
 
 * Make sure the bucket (`warehouse`) exists in MinIO before creating the connector.
 * The flush size (`flush.size`) controls how many records are batched before writing to S3.
+* To delete the sink plugin `curl -X DELETE http://localhost:8083/connectors/minio-s3-sink`
+* To list all connectors `curl http://localhost:8083/connectors`
 
 ---
 
