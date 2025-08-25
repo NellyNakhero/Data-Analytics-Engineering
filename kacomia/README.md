@@ -70,6 +70,11 @@ This project demonstrates a Kafka Connect pipeline that writes data from a Kafka
     --bootstrap-server kafka:9092
     ```
 
+   Ensure all topics exist
+
+   ```shell
+   docker exec -it kafka kafka-topics --list --bootstrap-server kafka:9092
+   ```
 
 ---
 
@@ -177,6 +182,7 @@ docker-compose down -v
 * The flush size (`flush.size`) controls how many records are batched before writing to S3.
 * To delete the sink plugin `curl -X DELETE http://localhost:8083/connectors/minio-s3-sink`
 * To list all connectors `curl http://localhost:8083/connectors`
+* To check if producer is registering schema correctly `curl http://localhost:8081/subjects` and you should see `["events-value", "logs-value", "metrics-value"]`
 
 ---
 
