@@ -2,34 +2,38 @@ name: Download and Package Kafka Connect Plugins
 
 on:
   push:
-  #   paths:
-  #     - 'plugins/**'  
+    # paths:
+    #   - 'plugins/**'
     branches:
+      - main
       - kacomia
 
 jobs:
   download-plugins:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout code
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Create plugin directory
+      - name: Create plugins directory
         run: mkdir -p plugins
 
-      - name: Download Kafka Connect S3 Plugin with Docker
+      - name: Download Kafka Connect S3 Plugin using Docker
         run: |
           docker run --rm \
             -v ${{ github.workspace }}/plugins:/plugins \
             confluentinc/cp-kafka-connect:7.6.0 \
-            confluent-hub install --no-prompt confluentinc/kafka-connect-s3:latest --component-dir /plugins/s3-plugin
+            confluent-hub install --no-prompt confluentinc/kafka-connect-s3:latest --component-dir /plugins
+
+      - name: List downloaded plugins
+        run: ls -l plugins
 
       - name: Zip Plugins Directory
         run: zip -r plugins.zip plugins/
 
-      - name: Upload Artifact
+      - name: Upload Plugins Artifact
         uses: actions/upload-artifact@v4
         with:
           name: kafka-connect-plugins
           path: plugins.zip
-
