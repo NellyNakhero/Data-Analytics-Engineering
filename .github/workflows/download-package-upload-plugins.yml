@@ -19,9 +19,9 @@ jobs:
       - name: Create plugins directory
         run: mkdir -p plugins
 
-      - name: Download Kafka Connect S3 Plugin using Docker
+      - name: Download Kafka Connect S3 Plugin using Docker (run as root)
         run: |
-          docker run --rm \
+          docker run --rm -u 0 \
             -v ${{ github.workspace }}/plugins:/plugins \
             confluentinc/cp-kafka-connect:7.6.0 \
             confluent-hub install --no-prompt confluentinc/kafka-connect-s3:latest --component-dir /plugins
