@@ -37,3 +37,46 @@ jobs:
         with:
           name: kafka-connect-plugins
           path: plugins.zip
+
+  upload-to-s3:
+    name: Upload Plugin to S3
+    needs: download-plugins
+    runs-on: ubuntu-latest
+    env:
+      AWS_ACCESS_KEY_ID: minioadmin
+      AWS_SECRET_ACCESS_KEY: minioadmin
+      AWS_REGION: us-east-1
+      S3_ENDPOINT_URL: https://a8e1d906649d.ngrok-free.app
+      S3_BUCKET_NAME: warehouse
+
+    steps:
+      - name: Download Plugin Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: kafka-connect-plugins
+          path: ./artifact
+
+      - name: Install AWS CLI
+        run: |
+          curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+          unzip -q awscliv2.zip
+          sudo ./aws/install
+          aws --version
+
+      - name: Upload to MinIO via ngrok
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.MINIO_ACCESS_KEY }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.MINIO_SECRET_KEY }}
+        run: |
+          FILE=./artifact/plugins.zip
+          BUCKET=${{ secrets.S3_BUCKET_NAME }}
+          ENDPOINT=${{ secrets.S3_ENDPOINT_URL }}
+
+          echo "Uploading $FILE to s3://$BUCKET/kafka-connect/plugins.zip"
+
+          aws s3 cp "$FILE" "s3://$BUCKET/kafka-connect/plugins.zip" \
+            --endpoint-url "$ENDPOINT" \
+            --region us-east-1 \
+            --no-verify-ssl \
+            --cli-connect-timeout 120 \
+            --header "ngrok-skip-browser-warning:true"
