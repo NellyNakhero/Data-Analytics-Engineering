@@ -7,10 +7,12 @@ on:
       - kacomia
 
 env:
+  # Hardcoded for testing; move these to GitHub secrets in production
   AWS_ACCESS_KEY_ID: minioadmin
   AWS_SECRET_ACCESS_KEY: minioadmin
+  AWS_REGION: us-east-1
   S3_BUCKET_NAME: warehouse
-  S3_ENDPOINT_URL: https://a8e1d906649d.ngrok-free.app
+  S3_ENDPOINT_URL: https://troy-player-causes-met.trycloudflare.com
 
 jobs:
   download-plugins:
@@ -23,7 +25,7 @@ jobs:
       - name: Create plugins directory
         run: mkdir -p plugins
 
-      - name: Download Kafka Connect S3 Plugin using Docker
+      - name: Download Kafka Connect S3 Plugin using Docker (run as root)
         run: |
           docker run --rm -u 0 \
             -v ${{ github.workspace }}/plugins:/plugins \
@@ -43,7 +45,7 @@ jobs:
           path: plugins.zip
 
   upload-to-s3:
-    name: Upload Plugin to MinIO via curl
+    name: Upload Plugin to S3 via Cloudflare Tunnel
     needs: download-plugins
     runs-on: ubuntu-latest
 
@@ -54,13 +56,24 @@ jobs:
           name: kafka-connect-plugins
           path: ./artifact
 
-      - name: Upload to MinIO using curl
+      - name: Install AWS CLI
+        run: |
+          if ! command -v aws &> /dev/null; then
+            curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+            unzip -q awscliv2.zip
+            sudo ./aws/install --update
+          fi
+
+      - name: Upload to MinIO via Cloudflare Tunnel
         run: |
           FILE=./artifact/plugins.zip
-          echo "Uploading $FILE to MinIO via ngrok..."
+          BUCKET=${{ env.S3_BUCKET_NAME }}
+          ENDPOINT=${{ env.S3_ENDPOINT_URL }}
 
-          curl -X PUT "$S3_ENDPOINT_URL/$S3_BUCKET_NAME/kafka-connect/plugins.zip" \
-            -H "ngrok-skip-browser-warning: true" \
-            -T "$FILE" \
-            -u "$AWS_ACCESS_KEY_ID:$AWS_SECRET_ACCESS_KEY" \
-            --insecure
+          echo "Uploading $FILE to s3://$BUCKET/kafka-connect/plugins.zip via $ENDPOINT"
+
+          aws s3 cp "$FILE" "s3://$BUCKET/kafka-connect/plugins.zip" \
+            --endpoint-url "$ENDPOINT" \
+            --region ${{ env.AWS_REGION }} \
+            --no-verify-ssl \
+            --cli-connect-timeout 120
