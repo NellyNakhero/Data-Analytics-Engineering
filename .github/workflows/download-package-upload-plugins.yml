@@ -2,8 +2,6 @@ name: Download and Package Kafka Connect Plugins
 
 on:
   push:
-    # paths:
-    #   - 'plugins/**'
     branches:
       - main
       - kacomia
@@ -39,14 +37,15 @@ jobs:
           path: plugins.zip
 
   upload-to-s3:
-    name: Upload Plugin to S3
+    name: Upload Plugin to MinIO
     needs: download-plugins
     runs-on: ubuntu-latest
+
     env:
       AWS_ACCESS_KEY_ID: minioadmin
       AWS_SECRET_ACCESS_KEY: minioadmin
       AWS_REGION: us-east-1
-      S3_ENDPOINT_URL: https://a8e1d906649d.ngrok-free.app
+      S3_ENDPOINT_URL: https://a8e1d906649d.ngrok-free.app  # Replace with your current ngrok link
       S3_BUCKET_NAME: warehouse
 
     steps:
@@ -60,19 +59,13 @@ jobs:
         run: aws --version
 
       - name: Upload to MinIO via ngrok
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.MINIO_ACCESS_KEY }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.MINIO_SECRET_KEY }}
         run: |
           FILE=./artifact/plugins.zip
-          BUCKET=${{ secrets.S3_BUCKET_NAME }}
-          ENDPOINT=${{ secrets.S3_ENDPOINT_URL }}
+          echo "Uploading $FILE to s3://${S3_BUCKET_NAME}/kafka-connect/plugins.zip"
 
-          echo "Uploading $FILE to s3://$BUCKET/kafka-connect/plugins.zip"
-
-          aws s3 cp "$FILE" "s3://$BUCKET/kafka-connect/plugins.zip" \
-            --endpoint-url "$ENDPOINT" \
-            --region us-east-1 \
+          aws s3 cp "$FILE" "s3://${S3_BUCKET_NAME}/kafka-connect/plugins.zip" \
+            --endpoint-url "$S3_ENDPOINT_URL" \
+            --region "$AWS_REGION" \
             --no-verify-ssl \
             --cli-connect-timeout 120 \
             --header "ngrok-skip-browser-warning:true"
