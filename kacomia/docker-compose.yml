@@ -1,3 +1,4 @@
+version: '3.8'
 
 services:
   zookeeper:
@@ -43,7 +44,7 @@ services:
       - kafka
       - schema-registry
     healthcheck:
-      test: [ "CMD", "curl", "-f", "http://localhost:8083/" ]
+      test: ["CMD", "curl", "-f", "http://localhost:8083/"]
       interval: 10s
       timeout: 5s
       retries: 20
@@ -55,7 +56,6 @@ services:
       CONNECT_OFFSET_STORAGE_TOPIC: connect-offsets
       CONNECT_STATUS_STORAGE_TOPIC: connect-statuses
 
-      # ✅ Protobuf support via Schema Registry
       CONNECT_KEY_CONVERTER: io.confluent.connect.protobuf.ProtobufConverter
       CONNECT_KEY_CONVERTER_SCHEMA_REGISTRY_URL: http://schema-registry:8081
       CONNECT_VALUE_CONVERTER: io.confluent.connect.protobuf.ProtobufConverter
@@ -69,13 +69,23 @@ services:
 
   minio:
     image: minio/minio:latest
+    container_name: minio
     ports:
       - "9000:9000"
       - "9001:9001"
     command: server /data --console-address ":9001"
 
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: cloudflared
+    depends_on:
+      - minio
+    command: tunnel --url http://minio:9000
+    restart: unless-stopped
+
   postgres:
     image: postgres:13
+    container_name: postgres
     environment:
       POSTGRES_USER: airflow
       POSTGRES_PASSWORD: airflow
