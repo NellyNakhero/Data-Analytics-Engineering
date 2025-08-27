@@ -6,6 +6,12 @@ on:
       - main
       - kacomia
 
+env:
+  AWS_ACCESS_KEY_ID: minioadmin
+  AWS_SECRET_ACCESS_KEY: minioadmin
+  S3_BUCKET_NAME: warehouse
+  S3_ENDPOINT_URL: https://a8e1d906649d.ngrok-free.app
+
 jobs:
   download-plugins:
     runs-on: ubuntu-latest
@@ -17,7 +23,7 @@ jobs:
       - name: Create plugins directory
         run: mkdir -p plugins
 
-      - name: Download Kafka Connect S3 Plugin using Docker (run as root)
+      - name: Download Kafka Connect S3 Plugin using Docker
         run: |
           docker run --rm -u 0 \
             -v ${{ github.workspace }}/plugins:/plugins \
@@ -37,16 +43,9 @@ jobs:
           path: plugins.zip
 
   upload-to-s3:
-    name: Upload Plugin to MinIO
+    name: Upload Plugin to MinIO via curl
     needs: download-plugins
     runs-on: ubuntu-latest
-
-    env:
-      AWS_ACCESS_KEY_ID: minioadmin
-      AWS_SECRET_ACCESS_KEY: minioadmin
-      AWS_REGION: us-east-1
-      S3_ENDPOINT_URL: https://a8e1d906649d.ngrok-free.app  # Replace with your current ngrok link
-      S3_BUCKET_NAME: warehouse
 
     steps:
       - name: Download Plugin Artifact
@@ -55,17 +54,13 @@ jobs:
           name: kafka-connect-plugins
           path: ./artifact
 
-      - name: Check AWS CLI version
-        run: aws --version
-
-      - name: Upload to MinIO via ngrok
+      - name: Upload to MinIO using curl
         run: |
           FILE=./artifact/plugins.zip
-          echo "Uploading $FILE to s3://${S3_BUCKET_NAME}/kafka-connect/plugins.zip"
+          echo "Uploading $FILE to MinIO via ngrok..."
 
-          aws s3 cp "$FILE" "s3://${S3_BUCKET_NAME}/kafka-connect/plugins.zip" \
-            --endpoint-url "$S3_ENDPOINT_URL" \
-            --region "$AWS_REGION" \
-            --no-verify-ssl \
-            --cli-connect-timeout 120 \
-            --header "ngrok-skip-browser-warning:true"
+          curl -X PUT "$S3_ENDPOINT_URL/$S3_BUCKET_NAME/kafka-connect/plugins.zip" \
+            -H "ngrok-skip-browser-warning: true" \
+            -T "$FILE" \
+            -u "$AWS_ACCESS_KEY_ID:$AWS_SECRET_ACCESS_KEY" \
+            --insecure
