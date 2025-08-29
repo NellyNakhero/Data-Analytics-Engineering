@@ -1,0 +1,44 @@
+name: Publish
+
+# Run on new release creation or when manually triggered
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      releaseType:
+        description: 'Where to release (staging or prod)?'
+        required: true
+        default: 'staging'
+
+jobs:
+  staging:
+    name: Deploy to staging
+
+    environment:
+      name: Staging
+      url: http://staging
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v2
+      - run: env
+      - name: Print smt
+        run: echo 'RUNNING STAGING'
+
+  prod:
+    if: github.event.inputs.releaseType == 'prod'
+    name: Deploy to prod
+    environment:
+      name: Prod
+      url: http://prod
+    needs: [staging]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - run: env
+      - name: Print smt
+        run: echo 'RUNNING PRODUCTION'
