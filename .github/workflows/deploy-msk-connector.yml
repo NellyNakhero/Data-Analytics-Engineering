@@ -18,6 +18,8 @@ jobs:
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
 
 #      - name: Set up AWS Credentials
 #        uses: aws-actions/configure-aws-credentials@v2
@@ -32,23 +34,28 @@ jobs:
           echo "Finding changed connector config files..."
 
           set +e
+
           CHANGED_FILES=$(git diff --name-only ${{ github.event.before }} ${{ github.sha }} 2>/dev/null | grep 'kafka-connect/plugins/connectors/teams/.*/.*\.json')
+
           if [[ -z "$CHANGED_FILES" ]]; then
-            # fallback: check last 1 commit if git diff fails (e.g. on first push)
-            echo "Fallback to checking last commit only"
-            CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD | grep 'kafka-connect/plugins/connectors/teams/.*/.*\.json')
+            echo "Fallback to checking HEAD~1..."
+            CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD 2>/dev/null | grep 'kafka-connect/plugins/connectors/teams/.*/.*\.json')
           fi
+
           set -e
 
+          if [[ -z "$CHANGED_FILES" ]]; then
+            echo "No changed connector files found."
+            exit 0
+          fi
+
           echo "$CHANGED_FILES" | while read file; do
-            if [[ -n "$file" ]]; then
-              echo "Found: $file"
-              echo "$file" >> changed.txt
-            fi
+            echo "$file" >> changed.txt
           done
 
           echo "Changed files:"
-          cat changed.txt || echo "None"
+          cat changed.txt
+      
       
 
       - name: Deploy changed connectors
