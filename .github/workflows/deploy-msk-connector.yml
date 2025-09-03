@@ -5,10 +5,13 @@ on:
     branches:
       - main
       - kacomia
+    paths:
+      - 'kafka-connect/plugins/connectors/teams/customers/connector-config.json'
 
 env:
   CONNECTOR_NAME: s3-parquet-connector
   AWS_REGION: us-east-1
+  CONNECTOR_CONFIG_PATH: kafka-connect/plugins/connectors/teams/customers/connector-config.json
 
 jobs:
   deploy-msk-connector:
@@ -27,8 +30,8 @@ jobs:
 
       - name: Validate connector config
         run: |
-          echo "Validating connector-config.json..."
-          jq empty connector-config.json
+          echo "Validating $CONNECTOR_CONFIG_PATH"
+          jq empty "$CONNECTOR_CONFIG_PATH"
 
       - name: Check if connector exists
         id: check
@@ -46,7 +49,7 @@ jobs:
         run: |
           echo "Creating connector $CONNECTOR_NAME..."
           aws kafkaconnect create-connector \
-            --cli-input-json file://connector-config.json
+            --cli-input-json file://"$CONNECTOR_CONFIG_PATH"
 
       - name: Update connector (if exists)
         if: steps.check.outputs.exists == '0'
@@ -60,7 +63,7 @@ jobs:
           aws kafkaconnect update-connector \
             --connector-name "$CONNECTOR_NAME" \
             --current-version "$CURRENT_VERSION" \
-            --connector-configuration file://connector-config.json
+            --connector-configuration file://"$CONNECTOR_CONFIG_PATH"
 
       - name: Wait for connector to reach RUNNING state
         run: |
@@ -72,7 +75,7 @@ jobs:
               --connector-name "$CONNECTOR_NAME" \
               --query 'connectorState' \
               --output text)
-          
+
             echo "Attempt $i: Current state = $STATUS"
 
             if [[ "$STATUS" == "RUNNING" ]]; then
