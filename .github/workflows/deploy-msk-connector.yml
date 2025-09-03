@@ -39,13 +39,13 @@ jobs:
 
           mkdir -p tmp
           git diff --name-only ${{ github.event.before }} ${{ github.sha }} 2>/dev/null \
-            | grep 'kafka-connect/plugins/connectors/teams/.*/plugin-config\.json' > changed.txt || true
+            | grep 'kafka-connect/plugins/connectors/teams/.*/connector-config\.json' > changed.txt || true
 
           # fallback
           if [[ ! -s changed.txt ]]; then
             echo "Fallback to HEAD~1"
             git diff --name-only HEAD~1 HEAD \
-              | grep 'kafka-connect/plugins/connectors/teams/.*/plugin-config\.json' > changed.txt || true
+              | grep 'kafka-connect/plugins/connectors/teams/.*/connector-config\.json' > changed.txt || true
           fi
 
           cat changed.txt || echo "No config changes found"
