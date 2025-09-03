@@ -7,7 +7,7 @@
 
     "s3.bucket.name": "warehouse",
 
-    "flush.size": "150",
+    "flush.size": "3",
     "s3.part.size": 5242880,
     "rotate.interval.ms": "600000",
 
@@ -27,4 +27,6 @@
     "value.converter.auto.register.schemas": "true",
     "value.converter.use.latest.version": "true"
   }
+
+
 }
