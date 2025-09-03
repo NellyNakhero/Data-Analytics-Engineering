@@ -2,11 +2,15 @@ name: Deploy MSK Connectors
 
 on:
   push:
+    branches:
+      - main
+      - kacomia
     paths:
-      - 'kafka-connect/plugins/connectors/teams/**/plugin-config.json'
+      - 'kafka-connect/plugins/connectors/teams/**/connector-config.json'
       - 'kafka-connect/base-config/base-infra-config.json'
       - '.github/scripts/merge-config.sh'
       - '.github/workflows/deploy-msk-connector.yml'
+
 
 env:
   AWS_REGION: us-east-1
