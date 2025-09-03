@@ -7,7 +7,7 @@
 
     "s3.bucket.name": "warehouse",
 
-    "flush.size": "8",
+    "flush.size": "9",
     "s3.part.size": 5242880,
     "rotate.interval.ms": "600000",
 
