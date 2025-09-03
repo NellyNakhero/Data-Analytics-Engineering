@@ -50,6 +50,12 @@ jobs:
 
           cat changed.txt || echo "No config changes found"
 
+      - name: Show changed.txt contents
+        run: |
+          echo "📝 Contents of changed.txt:"
+          cat changed.txt || echo "❌ No changes detected in plugin configs"
+
+
       - name: Prepare merge script
         run: |
           mkdir -p .github/scripts
