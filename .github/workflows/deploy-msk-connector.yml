@@ -1,4 +1,4 @@
-name: Deploy MSK Connect Connector
+name: Deploy MSK Connect Connectors
 
 on:
   push:
@@ -6,26 +6,18 @@ on:
       - main
       - kacomia
     paths:
-      - 'kafka-connect/plugins/connectors/teams/customers/connector-config.json'
+      - 'kafka-connect/plugins/connectors/teams/**/*.json'
 
 env:
-  CONNECTOR_NAME: s3-parquet-connector
   AWS_REGION: us-east-1
-  CONNECTOR_CONFIG_PATH: kafka-connect/plugins/connectors/teams/customers/connector-config.json
 
 jobs:
-  deploy-msk-connector:
+  deploy-connectors:
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v4
-
-      - name: Validate connector config
-        run: |
-          echo "Validating $CONNECTOR_CONFIG_PATH"
-          jq empty "$CONNECTOR_CONFIG_PATH"
-
 
       - name: Set up AWS Credentials
         uses: aws-actions/configure-aws-credentials@v2
@@ -34,62 +26,87 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
-
-      - name: Check if connector exists
-        id: check
+      - name: Get changed connector configs
+        id: changes
         run: |
-          set +e
-          aws kafkaconnect describe-connector \
-            --connector-name "$CONNECTOR_NAME" \
-            --query 'connectorState' \
-            --output text 2>/dev/null
-          echo "exists=$?" >> $GITHUB_OUTPUT
-          set -e
+          echo "Finding changed connector config files..."
+          CHANGED_FILES=$(git diff --name-only ${{ github.event.before }} ${{ github.sha }} | grep 'kafka-connect/plugins/connectors/teams/.*/.*\.json' || true)
 
-      - name: Create connector (if not exists)
-        if: steps.check.outputs.exists != '0'
-        run: |
-          echo "Creating connector $CONNECTOR_NAME..."
-          aws kafkaconnect create-connector \
-            --cli-input-json file://"$CONNECTOR_CONFIG_PATH"
-
-      - name: Update connector (if exists)
-        if: steps.check.outputs.exists == '0'
-        run: |
-          echo "Updating connector $CONNECTOR_NAME..."
-          CURRENT_VERSION=$(aws kafkaconnect describe-connector \
-            --connector-name "$CONNECTOR_NAME" \
-            --query 'connectorDescription.currentVersion' \
-            --output text)
-
-          aws kafkaconnect update-connector \
-            --connector-name "$CONNECTOR_NAME" \
-            --current-version "$CURRENT_VERSION" \
-            --connector-configuration file://"$CONNECTOR_CONFIG_PATH"
-
-      - name: Wait for connector to reach RUNNING state
-        run: |
-          echo "Waiting for connector to reach RUNNING state..."
-          ATTEMPTS=30
-          SLEEP=10
-          for ((i=1; i<=ATTEMPTS; i++)); do
-            STATUS=$(aws kafkaconnect describe-connector \
-              --connector-name "$CONNECTOR_NAME" \
-              --query 'connectorState' \
-              --output text)
-
-            echo "Attempt $i: Current state = $STATUS"
-
-            if [[ "$STATUS" == "RUNNING" ]]; then
-              echo "✅ Connector is running!"
-              exit 0
-            elif [[ "$STATUS" == "FAILED" || "$STATUS" == "DELETING" ]]; then
-              echo "❌ Connector failed or is being deleted"
-              exit 1
+          echo "$CHANGED_FILES" | while read file; do
+            if [[ -n "$file" ]]; then
+              echo "Found: $file"
+              echo "$file" >> changed.txt
             fi
-
-            sleep $SLEEP
           done
 
-          echo "⏰ Timeout: Connector did not reach RUNNING state in time"
-          exit 1
+          echo "Changed files:"
+          cat changed.txt || echo "None"
+
+      - name: Deploy changed connectors
+        if: success()
+        run: |
+          if [[ ! -f changed.txt ]]; then
+            echo "No connectors to deploy."
+            exit 0
+          fi
+
+          while read CONFIG_PATH; do
+            echo "Deploying connector from: $CONFIG_PATH"
+
+            CONNECTOR_NAME=$(basename "$CONFIG_PATH" .json)
+
+            echo "Connector name: $CONNECTOR_NAME"
+
+            echo "Validating config..."
+            jq empty "$CONFIG_PATH"
+
+            echo "Checking if connector exists..."
+            set +e
+            aws kafkaconnect describe-connector \
+              --connector-name "$CONNECTOR_NAME" \
+              --query 'connectorState' \
+              --output text 2>/dev/null
+            EXISTS=$?
+            set -e
+
+            if [[ "$EXISTS" != "0" ]]; then
+              echo "Connector $CONNECTOR_NAME does not exist. Creating..."
+              aws kafkaconnect create-connector \
+                --cli-input-json file://"$CONFIG_PATH"
+            else
+              echo "Connector $CONNECTOR_NAME exists. Updating..."
+              CURRENT_VERSION=$(aws kafkaconnect describe-connector \
+                --connector-name "$CONNECTOR_NAME" \
+                --query 'connectorDescription.currentVersion' \
+                --output text)
+
+              aws kafkaconnect update-connector \
+                --connector-name "$CONNECTOR_NAME" \
+                --current-version "$CURRENT_VERSION" \
+                --connector-configuration file://"$CONFIG_PATH"
+            fi
+
+            echo "Waiting for $CONNECTOR_NAME to become RUNNING..."
+
+            ATTEMPTS=30
+            SLEEP=10
+            for ((i=1; i<=ATTEMPTS; i++)); do
+              STATUS=$(aws kafkaconnect describe-connector \
+                --connector-name "$CONNECTOR_NAME" \
+                --query 'connectorState' \
+                --output text)
+
+              echo "Attempt $i: $STATUS"
+
+              if [[ "$STATUS" == "RUNNING" ]]; then
+                echo "✅ $CONNECTOR_NAME is RUNNING"
+                break
+              elif [[ "$STATUS" == "FAILED" || "$STATUS" == "DELETING" ]]; then
+                echo "❌ $CONNECTOR_NAME failed or is being deleted"
+                exit 1
+              fi
+
+              sleep $SLEEP
+            done
+
+          done < changed.txt
