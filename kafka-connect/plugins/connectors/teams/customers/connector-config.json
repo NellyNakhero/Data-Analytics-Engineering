@@ -1,6 +1,6 @@
 {
-  "name": "customers-bc-minio-s3-sink",
-  "config": {
+  "connectorName": "customers-bc-minio-s3-sink",
+  "connectorConfiguration": {
     "connector.class": "io.confluent.connect.s3.S3SinkConnector",
     "tasks.max": "1",
     "topics": "your-kafka-topic-name-1,your-kafka-topic-name-2,your-kafka-topic-name-3",
@@ -27,6 +27,4 @@
     "value.converter.auto.register.schemas": "true",
     "value.converter.use.latest.version": "true"
   }
-
-
 }
