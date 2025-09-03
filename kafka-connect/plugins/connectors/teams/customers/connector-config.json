@@ -25,4 +25,5 @@
     "value.converter.auto.register.schemas": "true",
     "value.converter.use.latest.version": "true"
   }
+
 }
