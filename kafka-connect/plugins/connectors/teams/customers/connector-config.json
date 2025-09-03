@@ -1,13 +1,15 @@
 {
-  "name": "minio-s3-sink",
+  "name": "customers-bc-minio-s3-sink",
   "config": {
     "connector.class": "io.confluent.connect.s3.S3SinkConnector",
     "tasks.max": "1",
-    "topics": "events,logs,metrics",
+    "topics": "your-kafka-topic-name-1,your-kafka-topic-name-2,your-kafka-topic-name-3",
 
     "s3.bucket.name": "warehouse",
-    "flush.size": "3",
+
+    "flush.size": "100",
     "s3.part.size": 5242880,
+    "rotate.interval.ms": "600000",
 
     "storage.class": "io.confluent.connect.s3.storage.S3Storage",
     "format.class": "io.confluent.connect.s3.format.parquet.ParquetFormat",
