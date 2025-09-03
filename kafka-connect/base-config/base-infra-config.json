@@ -1,0 +1,44 @@
+{
+  "kafkaConnectVersion": "2.9.1",
+  "plugins": [
+    {
+      "customPlugin": {
+        "customPluginArn": "arn:aws:kafkaconnect:us-east-1:123456789012:custom-plugin/s3-sink-plugin/abcd1234efgh5678",
+        "revision": 1
+      }
+    }
+  ],
+  "capacity": {
+    "autoscaling": {
+      "minWorkerCount": 1,
+      "maxWorkerCount": 1,
+      "mcuCount": 1,
+      "scaleInPolicy": {
+        "cpuUtilizationPercentage": 20
+      },
+      "scaleOutPolicy": {
+        "cpuUtilizationPercentage": 80
+      }
+    }
+  },
+  "kafkaCluster": {
+    "apacheKafkaCluster": {
+      "bootstrapServers": "b-1.mskcluster.example.com:9092,b-2.mskcluster.example.com:9092",
+      "vpc": {
+        "subnets": [
+          "subnet-abc12345"
+        ],
+        "securityGroups": [
+          "sg-abc12345"
+        ]
+      }
+    }
+  },
+  "kafkaClusterEncryptionInTransit": {
+    "encryptionType": "PLAINTEXT"
+  },
+  "kafkaClusterClientAuthentication": {
+    "authenticationType": "NONE"
+  },
+  "serviceExecutionRoleArn": "arn:aws:iam::123456789012:role/MSKConnectExecutionRole"
+}
