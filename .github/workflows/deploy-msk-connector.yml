@@ -1,22 +1,22 @@
-name: Deploy MSK Connect Connectors
+name: Deploy MSK Connectors
 
 on:
   push:
-    branches:
-      - main
-      - kacomia
     paths:
-      - 'kafka-connect/plugins/connectors/teams/**/*.json'
+      - 'kafka-connect/plugins/connectors/teams/**/plugin-config.json'
+      - 'kafka-connect/base-config/base-infra-config.json'
+      - '.github/scripts/merge-config.sh'
+      - '.github/workflows/deploy-msk-connector.yml'
 
 env:
   AWS_REGION: us-east-1
 
 jobs:
-  deploy-connectors:
+  deploy:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout Repo
+      - name: Checkout code
         uses: actions/checkout@v4
         with:
           fetch-depth: 2
@@ -28,101 +28,81 @@ jobs:
 #          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
 #          aws-region: ${{ env.AWS_REGION }}
 
-      - name: Get changed connector configs
+      - name: Get changed plugin configs
         id: changes
         run: |
-          echo "Finding changed connector config files..."
+          echo "🔍 Finding changed plugin configs..."
 
-          set +e
+          mkdir -p tmp
+          git diff --name-only ${{ github.event.before }} ${{ github.sha }} 2>/dev/null \
+            | grep 'kafka-connect/plugins/connectors/teams/.*/plugin-config\.json' > changed.txt || true
 
-          CHANGED_FILES=$(git diff --name-only ${{ github.event.before }} ${{ github.sha }} 2>/dev/null | grep 'kafka-connect/plugins/connectors/teams/.*/.*\.json')
-
-          if [[ -z "$CHANGED_FILES" ]]; then
-            echo "Fallback to checking HEAD~1..."
-            CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD 2>/dev/null | grep 'kafka-connect/plugins/connectors/teams/.*/.*\.json')
+          # fallback
+          if [[ ! -s changed.txt ]]; then
+            echo "Fallback to HEAD~1"
+            git diff --name-only HEAD~1 HEAD \
+              | grep 'kafka-connect/plugins/connectors/teams/.*/plugin-config\.json' > changed.txt || true
           fi
 
-          set -e
+          cat changed.txt || echo "No config changes found"
 
-          if [[ -z "$CHANGED_FILES" ]]; then
-            echo "No changed connector files found."
-            exit 0
-          fi
-
-          echo "$CHANGED_FILES" | while read file; do
-            echo "$file" >> changed.txt
-          done
-
-          echo "Changed files:"
-          cat changed.txt
-      
-      
-
-      - name: Deploy changed connectors
-        if: success()
+      - name: Prepare merge script
         run: |
-          if [[ ! -f changed.txt ]]; then
-            echo "No connectors to deploy."
-            exit 0
-          fi
+          mkdir -p .github/scripts
+          echo '#!/bin/bash
+          set -e
+          BASE_CONFIG=$1
+          PLUGIN_CONFIG=$2
+          MERGED_OUTPUT=$3
+          CONNECTOR_NAME=$(jq -r ".connectorName" "$PLUGIN_CONFIG")
+          CONNECTOR_CONFIGURATION=$(jq -c ".connectorConfiguration" "$PLUGIN_CONFIG")
+          jq \
+            --arg name "$CONNECTOR_NAME" \
+            --argjson config "$CONNECTOR_CONFIGURATION" \
+            ". + {connectorName: \$name, connectorConfiguration: \$config}" \
+            "$BASE_CONFIG" > "$MERGED_OUTPUT"
+          echo "✅ Merged: $MERGED_OUTPUT"' > .github/scripts/merge-config.sh
+          chmod +x .github/scripts/merge-config.sh
 
-          while read CONFIG_PATH; do
-            echo "Deploying connector from: $CONFIG_PATH"
+      - name: Merge configs
+        run: |
+          mkdir -p merged
+          while read plugin_config; do
+            [[ -z "$plugin_config" ]] && continue
+            TEAM_NAME=$(basename "$(dirname "$plugin_config")")
+            BASE_CONFIG="kafka-connect/base-config/base-infra-config.json"
+            MERGED="merged/${TEAM_NAME}-merged.json"
 
-            CONNECTOR_NAME=$(basename "$CONFIG_PATH" .json)
+            echo "🔧 Merging for $TEAM_NAME"
+            .github/scripts/merge-config.sh "$BASE_CONFIG" "$plugin_config" "$MERGED"
 
-            echo "Connector name: $CONNECTOR_NAME"
+            echo "$MERGED" >> merged-connectors.txt
+          done < changed.txt
 
-            echo "Validating config..."
-            jq empty "$CONFIG_PATH"
+      - name: Deploy merged configs
+        run: |
+          while read merged; do
+            [[ -z "$merged" ]] && continue
+            echo "🚀 Deploying: $merged"
 
-            echo "Checking if connector exists..."
+            CONNECTOR_NAME=$(jq -r '.connectorName' "$merged")
+
+            echo "🔍 Checking if $CONNECTOR_NAME exists..."
             set +e
-            aws kafkaconnect describe-connector \
-              --connector-name "$CONNECTOR_NAME" \
-              --query 'connectorState' \
-              --output text 2>/dev/null
+            aws kafkaconnect describe-connector --connector-name "$CONNECTOR_NAME" > existing.json 2>/dev/null
             EXISTS=$?
             set -e
 
-            if [[ "$EXISTS" != "0" ]]; then
-              echo "Connector $CONNECTOR_NAME does not exist. Creating..."
-              aws kafkaconnect create-connector \
-                --cli-input-json file://"$CONFIG_PATH"
+            echo "🔍 Validating config..."
+            aws kafkaconnect validate-connector-definition --cli-input-json file://"$merged" > /dev/null
+
+            if [[ "$EXISTS" -eq 0 ]]; then
+              echo "🔁 Updating connector $CONNECTOR_NAME"
+              aws kafkaconnect update-connector --connector-name "$CONNECTOR_NAME" --current-version $(jq -r '.connectorDescription.currentVersion' existing.json) \
+                --capacity "$(jq -c '.capacity' "$merged")" \
+                --connector-configuration "$(jq -c '.connectorConfiguration' "$merged")"
             else
-              echo "Connector $CONNECTOR_NAME exists. Updating..."
-              CURRENT_VERSION=$(aws kafkaconnect describe-connector \
-                --connector-name "$CONNECTOR_NAME" \
-                --query 'connectorDescription.currentVersion' \
-                --output text)
-
-              aws kafkaconnect update-connector \
-                --connector-name "$CONNECTOR_NAME" \
-                --current-version "$CURRENT_VERSION" \
-                --connector-configuration file://"$CONFIG_PATH"
+              echo "🆕 Creating connector $CONNECTOR_NAME"
+              aws kafkaconnect create-connector --cli-input-json file://"$merged"
             fi
-
-            echo "Waiting for $CONNECTOR_NAME to become RUNNING..."
-
-            ATTEMPTS=30
-            SLEEP=10
-            for ((i=1; i<=ATTEMPTS; i++)); do
-              STATUS=$(aws kafkaconnect describe-connector \
-                --connector-name "$CONNECTOR_NAME" \
-                --query 'connectorState' \
-                --output text)
-
-              echo "Attempt $i: $STATUS"
-
-              if [[ "$STATUS" == "RUNNING" ]]; then
-                echo "✅ $CONNECTOR_NAME is RUNNING"
-                break
-              elif [[ "$STATUS" == "FAILED" || "$STATUS" == "DELETING" ]]; then
-                echo "❌ $CONNECTOR_NAME failed or is being deleted"
-                exit 1
-              fi
-
-              sleep $SLEEP
-            done
-
-          done < changed.txt
+          done < merged-connectors.txt
